@@ -11,7 +11,7 @@ if __name__ == '__main__':
     lr = 0.01
     niter = 300
 
-    model_name = "naver/DUSt3R_ViTLarge_BaseDecoder_512_dpt"
+    model_name = "./checkpoints/DUSt3R_ViTLarge_BaseDecoder_512_dpt.pth"
     # you can put the path to a local checkpoint in model_name if needed
     model = AsymmetricCroCo3DStereo.from_pretrained(model_name).to(device)
     # load_images can take a list of images or a directory
