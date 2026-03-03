@@ -8,6 +8,7 @@ if __name__ == '__main__':
     device = 'cuda'
     batch_size = 1
     schedule = 'cosine'
+    # schedule = 'linear'
     lr = 0.01
     niter = 300
 
@@ -15,7 +16,11 @@ if __name__ == '__main__':
     # you can put the path to a local checkpoint in model_name if needed
     model = AsymmetricCroCo3DStereo.from_pretrained(model_name).to(device)
     # load_images can take a list of images or a directory
-    images = load_images(['croco/assets/Chateau1.png', 'croco/assets/Chateau2.png'], size=512)
+    # images = load_images(['croco/assets/Chateau1.png', 'croco/assets/Chateau2.png'], size=512)
+    images = load_images(['/home/sgan/transparent/dataset/train_data/images/000004.png', '/home/sgan/transparent/dataset/train_data/images/000031.png'], size=512)
+    # images = load_images(['/home/sgan/dust3r/data/IMG_2292.HEIC', '/home/sgan/dust3r/data/IMG_6975.HEIC'], size=512)
+
+
     pairs = make_pairs(images, scene_graph='complete', prefilter=None, symmetrize=True)
     output = inference(pairs, model, device, batch_size=batch_size)
 
@@ -48,7 +53,45 @@ if __name__ == '__main__':
     confidence_masks = scene.get_masks()
 
     # visualize reconstruction
-    scene.show()
+    # scene.show()
+
+    # === 剔除 NaN 脏数据并保存为本地文件 ===
+    import open3d as o3d
+    import numpy as np
+    
+    valid_pts = []
+    valid_colors = []
+    
+    for i in range(len(imgs)):
+        conf_i = confidence_masks[i].cpu().numpy()
+        pts_i = pts3d[i].detach().cpu().numpy()
+        img_i = imgs[i]
+        if hasattr(img_i, 'cpu'):
+            img_i = img_i.detach().cpu().numpy()
+            
+        valid_pts.append(pts_i[conf_i])
+        valid_colors.append(img_i[conf_i])
+
+    merged_pts = np.concatenate(valid_pts, axis=0)
+    merged_colors = np.concatenate(valid_colors, axis=0)
+    if merged_colors.max() > 2.0:
+        merged_colors = merged_colors / 255.0
+        
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(merged_pts)
+    pcd.colors = o3d.utility.Vector3dVector(merged_colors)
+    
+    # 1. 致命异常点过滤（防止因为 Inf/NaN 导致渲染器黑屏）
+    # open3d 的 remove_non_finite_points() 仅返回一个 pcd 对象，不能拆包
+    pcd = pcd.remove_non_finite_points()
+    
+    # 2. 保存下来
+    o3d.io.write_point_cloud("dust3r_output.ply", pcd)
+    print(f"点云已保存至 dust3r_output.ply，有效点数: {len(pcd.points)}")
+    
+    # 3. 尝试弹出窗口
+    # o3d.visualization.draw_geometries([pcd], window_name="DUSt3R Recon")
+    # =========================================
 
     # find 2D-2D matches between the two images
     from dust3r.utils.geometry import find_reciprocal_matches, xy_grid
